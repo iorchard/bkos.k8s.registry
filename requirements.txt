@@ -1,0 +1,6 @@
+pulumi>=3.0.0,<4.0.0
+pulumi-openstack>=3.0.0,<4.0.0
+pulumi-command
+cryptography
+jinja2
+types-requests

@@ -7,7 +7,6 @@ stack:
 
 config:
 	pulumi stack select $(STACK)
-	pulumi config set --secret 'openstack:password'
 	pulumi config set 'private_network_name' 'private-net'
 	pulumi config set 'provider_network_name' 'public-net'
 	pulumi config set 'dns_zone_name' 'pbos.local'
@@ -17,6 +16,7 @@ config:
 #########################################################
 
 	pulumi config set 'openstack:authUrl' 'http://$(ENDPOINT_IP):5000/v3'
+	pulumi config set --secret 'openstack:password'
 	pulumi config set 'openstack:projectDomainName' 'default'
 	pulumi config set 'openstack:userDomainName' 'default'
 	pulumi config set 'openstack:userName' 'admin'
