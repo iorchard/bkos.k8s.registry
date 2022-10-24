@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+
+NEWREPO="{{ registry_fqdn }}:5000/magnum"
+
+{% raw %}
+declare -A images=(
+  [docker.io/rancher/hyperkube]=v1.21.11-rancher1
+  [docker.io/openstackmagnum/heat-container-agent]=wallaby-stable-1
+  [quay.io/coreos/etcd]=v3.4.6
+  [docker.io/coredns/coredns]=1.6.6
+  [docker.io/k8scloudprovider/cinder-csi-plugin]=v1.21.0
+  [docker.io/k8scloudprovider/k8s-keystone-auth]=v1.21.0
+  [docker.io/k8scloudprovider/octavia-ingress-controller]=v1.21.0
+  [docker.io/k8scloudprovider/openstack-cloud-controller-manager]=v1.21.0
+  [k8s.gcr.io/pause]=3.2
+  [k8s.gcr.io/pause]=3.1
+  [quay.io/calico/cni]=v3.21.2
+  [quay.io/calico/kube-controllers]=v3.21.2
+  [quay.io/calico/node]=v3.21.2
+  [quay.io/calico/pod2daemon-flexvol]=v3.21.2
+  [quay.io/k8scsi/csi-attacher]=v2.0.0
+  [quay.io/k8scsi/csi-node-driver-registrar]=v1.1.0
+  [quay.io/k8scsi/csi-provisioner]=v1.4.0
+  [quay.io/k8scsi/csi-resizer]=v0.3.0
+  [quay.io/k8scsi/csi-snapshotter]=v1.2.2
+  [gcr.io/google_containers/cluster-proportional-autoscaler-amd64]=1.1.2
+  [k8s.gcr.io/metrics-server/metrics-server]=v0.5.2
+  [k8s.gcr.io/node-problem-detector]=v0.6.2
+)
+no=${#images[@]}
+i=1
+for repo in "${!images[@]}";do
+  image_name=${repo##*/}
+  echo "image pull ${repo}:${images[$repo]}"
+  docker pull ${repo}:${images[$repo]} > /dev/null
+  echo "image push $image_name:${images[$repo]} to $NEWREPO"
+  docker tag ${repo}:${images[$repo]} $NEWREPO/${image_name}:${images[$repo]}
+  docker push ${NEWREPO}/${image_name}:${images[$repo]} > /dev/null
+  docker rmi ${repo}:${images[$repo]} > /dev/null
+  sleep 1
+  docker rmi ${NEWREPO}/${image_name}:${images[$repo]} > /dev/null
+  echo "Completed: ${i}/${no}"
+  ((i++))
+done
+{% endraw %}

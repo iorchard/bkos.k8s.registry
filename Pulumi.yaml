@@ -1,0 +1,5 @@
+name: bkos.k8s.registry
+description: A K8S Registry Provisioning pulumi program
+runtime:
+    name: python
+
