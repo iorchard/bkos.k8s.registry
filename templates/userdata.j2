@@ -37,6 +37,7 @@ packages:
   - curl
   - gpg
   - lsb-release
+  - etcd-discovery
 package_update: true
 write_files:
 - path: /etc/hosts
@@ -51,8 +52,13 @@ write_files:
   content: |
     {{ push_images | indent(width=4) }}
   permissions: 0755
+- path: /etc/etcd-discovery/etcd-discovery.conf
+  content: |
+    {{ etcd_discovery_conf | indent(width=4) }}
+  permissions: 0644
 runcmd:
   - /root/post_run.sh
   - /root/push_images.sh
-  - touch /tmp/i_am_ready
+  - systemctl restart etcd-discovery.service
+  - touch /home/clex/.i_am_ready
   - systemctl disable cloud-init

@@ -22,8 +22,6 @@ def create_template(tmpl_file: str) -> Template:
     tmpl = env.get_template(tmpl_file)
     return tmpl
 
-
-stack = pulumi.get_stack()
 homedir = pathlib.Path.home()
 config = pulumi.Config()
 
@@ -147,6 +145,17 @@ sg_tcp_registry = openstack.networking.SecGroupRule(
     description="Allow incoming registry service",
     security_group_id=sg.id,
 )
+sg_tcp_etcd_discovery = openstack.networking.SecGroupRule(
+    "sg_tcp_etcd_discovery",
+    direction="ingress",
+    ethertype="IPv4",
+    protocol="tcp",
+    port_range_min=8087,
+    port_range_max=8087,
+    remote_ip_prefix="0.0.0.0/0",
+    description="Allow incoming etcd discovery service",
+    security_group_id=sg.id,
+)
 registry_fip = openstack.networking.FloatingIp(
     "registry_fip", pool=config.get("provider_network_name")
 )
@@ -199,6 +208,23 @@ etchosts_tmpl = command.local.Command(
     ),
     opts=pulumi.ResourceOptions(depends_on=[registry_fip]),
 )
+etcd_discovery_conf_tmpl = command.local.Command(
+    "etcd_discovery_conf_tmpl",
+    create=pulumi.Output.concat(
+        "echo '",
+        pulumi.Output.all(
+            cluster_name=cluster_name,
+            dns_zone_name=dns_zone_name,
+        ).apply(
+            lambda v: create_template("etcd_discovery_conf.j2").render(
+                cluster_name=v["cluster_name"],
+                dns_zone_name=v["dns_zone_name"],
+            )
+        ),
+        "'",
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[registry_fip]),
+)
 userdata_tmpl = command.local.Command(
     "userdata_tmpl",
     create=pulumi.Output.concat(
@@ -207,12 +233,14 @@ userdata_tmpl = command.local.Command(
             public_key=public_key,
             post_run=post_run_tmpl.stdout,
             push_images=push_images_tmpl.stdout,
+            etcd_discovery_conf=etcd_discovery_conf_tmpl.stdout,
             etchosts=etchosts_tmpl.stdout,
         ).apply(
             lambda v: create_template("userdata.j2").render(
                 public_key=v["public_key"],
                 post_run=v["post_run"],
                 push_images=v["push_images"],
+                etcd_discovery_conf=v["etcd_discovery_conf"],
                 etchosts=v["etchosts"],
             )
         ),
@@ -268,8 +296,8 @@ rs = openstack.dns.RecordSet(
 wait_sleep = command.local.Command(
     "wait_sleep",
     create=f"""while true;do
-        echo 2>/dev/null > /dev/tcp/{registry_fqdn}/22 && exit 0 || sleep 5;
-      done""",
+        echo 2>/dev/null > /dev/tcp/{registry_fqdn}/22 && break || sleep 5;
+      done; sleep 120""",
     interpreter=["/bin/bash", "-c"],
     opts=pulumi.ResourceOptions(depends_on=[registry_fip_assoc]),
 )
@@ -281,7 +309,7 @@ registry_ready = command.remote.Command(
         user="clex",
         private_key=private_key,
     ),
-    create="while true;do [ -f /tmp/i_am_ready ] && exit 0 || sleep 5;done",
+    create="while true;do [ -f $HOME/.i_am_ready ] && exit 0 || sleep 5;done",
     opts=pulumi.ResourceOptions(depends_on=[wait_sleep]),
 )
 
